@@ -1,0 +1,27 @@
+# Core Libraries
+pandas==2.2.3
+numpy==1.26.4
+
+# Machine Learning & Data Processing
+scikit-learn==1.5.2
+xgboost==2.1.1
+joblib==1.4.2
+
+# Visualization
+matplotlib==3.9.2
+seaborn==0.13.2
+plotly==5.24.0
+
+# Streamlit App
+streamlit==1.39.0
+
+# Model Tracking / Logging (optional, used in training logs)
+mlflow==2.17.1
+
+# Backend / ORM (if used for saving user info)
+sqlalchemy==2.0.32
+
+# Optional Utilities
+protobuf==4.25.3
+packaging==24.1
+requests==2.32.3
