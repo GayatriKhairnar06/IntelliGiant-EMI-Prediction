@@ -244,4 +244,4 @@ with tab2:
 # Footer (small)
 # ---------------------------------------------------------------------
 st.markdown("---")
-st.markdown("<div class='ig-footer'>🚀 Powered by MLflow, Streamlit, and Scikit-learn | Developed by Gayatri Khairnar 💙</div>", unsafe_allow_html=True)
+st.markdown("<div class='ig-footer'>🚀 Powered by MLflow, Streamlit, and Scikit-learn | Developed by Gayatri Khairnar </div>", unsafe_allow_html=True)
