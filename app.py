@@ -1,14 +1,22 @@
-# app.py — IntelliGiant EMI Prediction
-# Deployment-ready version (no MLflow dependency)
-
 import streamlit as st
 import pandas as pd
 import joblib
 import numpy as np
 
 # -----------------------------------------------------------
-# Step 1: Load trained models (stored locally)
+# MUST BE FIRST — Streamlit Page Setup
 # -----------------------------------------------------------
+st.set_page_config(
+    page_title="IntelliGiant EMI Prediction",
+    page_icon="💰",
+    layout="centered"
+)
+
+# -----------------------------------------------------------
+# Step 1: Load trained models
+# -----------------------------------------------------------
+st.header("🔄 Loading Models...")
+
 try:
     clf_model = joblib.load("EMI_LogisticRegression_Model.pkl")
     reg_model = joblib.load("EMI_XGBoostRegressor_Model.pkl")
@@ -17,9 +25,8 @@ except Exception as e:
     st.error(f"❌ Error loading models: {e}")
 
 # -----------------------------------------------------------
-# Step 2: Streamlit Page Setup
+# Title and Description
 # -----------------------------------------------------------
-st.set_page_config(page_title="IntelliGiant EMI Prediction", page_icon="💰", layout="centered")
 st.title("💸 IntelliGiant: EMI Eligibility & Prediction Platform")
 st.write("Analyze your financial profile to check EMI eligibility and estimate EMI amount.")
 
@@ -66,8 +73,7 @@ requested_amount = st.number_input("Requested Loan Amount (₹)", 10000, 5000000
 requested_tenure = st.number_input("Requested Tenure (months)", 6, 120, 24)
 
 # -----------------------------------------------------------
-# Step 4: Preprocess Input Data
-# (Using the exact variable and column names from your original code)
+# Step 4: Prepare Input DataFrame (with your exact variable names)
 # -----------------------------------------------------------
 input_data = pd.DataFrame({
     "age": [age],
@@ -107,26 +113,24 @@ input_data = pd.DataFrame({
 })
 
 # -----------------------------------------------------------
-# Step 5: Prediction
+# Prediction Button
 # -----------------------------------------------------------
 if st.button("🔍 Predict EMI Eligibility and Amount"):
     try:
-        # Classification prediction
         eligibility_pred = clf_model.predict(input_data)[0]
         eligibility_label = "Eligible" if eligibility_pred == 1 else "Not Eligible"
 
-        # Regression prediction (EMI amount)
         emi_pred = reg_model.predict(input_data)[0]
 
         st.subheader("📊 Prediction Results")
-        st.write(f"### ✅ EMI Eligibility: {eligibility_label}")
-        st.write(f"### 💵 Predicted EMI Amount: ₹{emi_pred:,.2f}")
+        st.write(f"### 👉 EMI Eligibility: **{eligibility_label}**")
+        st.write(f"### 👉 Predicted EMI Amount: **₹{emi_pred:,.2f}**")
 
     except Exception as e:
-        st.error(f"⚠️ Error during prediction: {e}")
+        st.error(f"⚠️ Prediction Error: {e}")
 
 # -----------------------------------------------------------
-# Step 6: Footer
+# Footer
 # -----------------------------------------------------------
 st.markdown("---")
 st.caption("🚀 Developed by Gayatri Khairnar | IntelliGiant EMI Prediction Platform")
