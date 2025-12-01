@@ -1,10 +1,14 @@
+# -----------------------------------------------------------
+# app.py — IntelliGiant EMI Prediction (FINAL FIXED VERSION)
+# -----------------------------------------------------------
+
 import streamlit as st
 import pandas as pd
 import joblib
 import numpy as np
 
 # -----------------------------------------------------------
-# MUST BE FIRST — Streamlit Page Setup
+# MUST be the FIRST Streamlit command
 # -----------------------------------------------------------
 st.set_page_config(
     page_title="IntelliGiant EMI Prediction",
@@ -13,9 +17,10 @@ st.set_page_config(
 )
 
 # -----------------------------------------------------------
-# Step 1: Load trained models
+# Load Models
 # -----------------------------------------------------------
-st.header("🔄 Loading Models...")
+st.title("💸 IntelliGiant: EMI Eligibility & EMI Amount Prediction")
+st.write("Analyze your financial profile to check EMI eligibility and estimate EMI amount.")
 
 try:
     clf_model = joblib.load("EMI_LogisticRegression_Model.pkl")
@@ -25,15 +30,10 @@ except Exception as e:
     st.error(f"❌ Error loading models: {e}")
 
 # -----------------------------------------------------------
-# Title and Description
-# -----------------------------------------------------------
-st.title("💸 IntelliGiant: EMI Eligibility & Prediction Platform")
-st.write("Analyze your financial profile to check EMI eligibility and estimate EMI amount.")
-
-# -----------------------------------------------------------
-# Step 3: Collect User Inputs
+# User Inputs
 # -----------------------------------------------------------
 st.header("📋 Enter Applicant Details")
+
 col1, col2 = st.columns(2)
 
 with col1:
@@ -52,7 +52,9 @@ with col2:
     family_size = st.number_input("Family Size", 1, 10, 4)
     dependents = st.number_input("Dependents", 0, 5, 1)
 
+# Financial Information
 st.header("💰 Financial Information")
+
 school_fees = st.number_input("School Fees (₹)", 0, 100000, 5000)
 college_fees = st.number_input("College Fees (₹)", 0, 200000, 0)
 travel_expenses = st.number_input("Travel Expenses (₹)", 0, 50000, 2000)
@@ -73,47 +75,49 @@ requested_amount = st.number_input("Requested Loan Amount (₹)", 10000, 5000000
 requested_tenure = st.number_input("Requested Tenure (months)", 6, 120, 24)
 
 # -----------------------------------------------------------
-# Step 4: Prepare Input DataFrame (with your exact variable names)
+# Build Input Data (EXACT feature names + EXACT order)
 # -----------------------------------------------------------
-input_data = pd.DataFrame({
-    "age": [age],
-    "gender": [1 if gender == "Male" else 0],
-    "marital_status_Single": [1 if marital_status == "Single" else 0],
-    "education_High School": [1 if education == "High School" else 0],
-    "education_Post Graduate": [1 if education == "Post Graduate" else 0],
-    "education_Professional": [1 if education == "Professional" else 0],
-    "monthly_salary": [monthly_salary],
-    "employment_type_Private": [1 if employment_type == "Private" else 0],
-    "employment_type_Self-employed": [1 if employment_type == "Self-employed" else 0],
-    "years_of_employment": [years_of_employment],
-    "company_type_MNC": [1 if company_type == "MNC" else 0],
-    "company_type_Mid-size": [1 if company_type == "Mid-size" else 0],
-    "company_type_Small": [1 if company_type == "Small" else 0],
-    "company_type_Startup": [1 if company_type == "Startup" else 0],
-    "house_type": [1 if house_type == "Owned" else 0],
-    "monthly_rent": [monthly_rent],
-    "family_size": [family_size],
-    "dependents": [dependents],
-    "school_fees": [school_fees],
-    "college_fees": [college_fees],
-    "travel_expenses": [travel_expenses],
-    "groceries_utilities": [groceries_utilities],
-    "other_monthly_expenses": [other_expenses],
-    "existing_loans": [1 if existing_loans == "Yes" else 0],
-    "current_emi_amount": [current_emi],
-    "credit_score": [credit_score],
-    "bank_balance": [bank_balance],
-    "emergency_fund": [emergency_fund],
-    "emi_scenario_Education EMI": [1 if emi_scenario == "Education EMI" else 0],
-    "emi_scenario_Home Appliances EMI": [1 if emi_scenario == "Home Appliances EMI" else 0],
-    "emi_scenario_Personal Loan EMI": [1 if emi_scenario == "Personal Loan EMI" else 0],
-    "emi_scenario_Vehicle EMI": [1 if emi_scenario == "Vehicle EMI" else 0],
-    "requested_amount": [requested_amount],
-    "requested_tenure": [requested_tenure],
-})
+input_data = pd.DataFrame([{
+    'age': age,
+    'gender': 1 if gender == "Male" else 0,
+    'monthly_salary': monthly_salary,
+    'years_of_employment': years_of_employment,
+    'house_type': 1 if house_type == "Owned" else 0,
+    'monthly_rent': monthly_rent,
+    'family_size': family_size,
+    'dependents': dependents,
+    'school_fees': school_fees,
+    'college_fees': college_fees,
+    'travel_expenses': travel_expenses,
+    'groceries_utilities': groceries_utilities,
+    'other_monthly_expenses': other_expenses,
+    'existing_loans': 1 if existing_loans == "Yes" else 0,
+    'current_emi_amount': current_emi,
+    'credit_score': credit_score,
+    'bank_balance': bank_balance,
+    'emergency_fund': emergency_fund,
+    'requested_amount': requested_amount,
+    'requested_tenure': requested_tenure,
+
+    # Dummies (MUST MATCH EXACT FEATURE NAMES)
+    'marital_status_Single': 1 if marital_status == "Single" else 0,
+    'education_High School': 1 if education == "High School" else 0,
+    'education_Post Graduate': 1 if education == "Post Graduate" else 0,
+    'education_Professional': 1 if education == "Professional" else 0,
+    'employment_type_Private': 1 if employment_type == "Private" else 0,
+    'employment_type_Self-employed': 1 if employment_type == "Self-employed" else 0,
+    'company_type_MNC': 1 if company_type == "MNC" else 0,
+    'company_type_Mid-size': 1 if company_type == "Mid-size" else 0,
+    'company_type_Small': 1 if company_type == "Small" else 0,
+    'company_type_Startup': 1 if company_type == "Startup" else 0,
+    'emi_scenario_Education EMI': 1 if emi_scenario == "Education EMI" else 0,
+    'emi_scenario_Home Appliances EMI': 1 if emi_scenario == "Home Appliances EMI" else 0,
+    'emi_scenario_Personal Loan EMI': 1 if emi_scenario == "Personal Loan EMI" else 0,
+    'emi_scenario_Vehicle EMI': 1 if emi_scenario == "Vehicle EMI" else 0
+}])
 
 # -----------------------------------------------------------
-# Prediction Button
+# Prediction
 # -----------------------------------------------------------
 if st.button("🔍 Predict EMI Eligibility and Amount"):
     try:
@@ -123,11 +127,11 @@ if st.button("🔍 Predict EMI Eligibility and Amount"):
         emi_pred = reg_model.predict(input_data)[0]
 
         st.subheader("📊 Prediction Results")
-        st.write(f"### 👉 EMI Eligibility: **{eligibility_label}**")
-        st.write(f"### 👉 Predicted EMI Amount: **₹{emi_pred:,.2f}**")
+        st.write(f"### ✅ EMI Eligibility: **{eligibility_label}**")
+        st.write(f"### 💵 Predicted EMI Amount: **₹{emi_pred:,.2f}**")
 
     except Exception as e:
-        st.error(f"⚠️ Prediction Error: {e}")
+        st.error(f"⚠️ Error during prediction: {e}")
 
 # -----------------------------------------------------------
 # Footer
