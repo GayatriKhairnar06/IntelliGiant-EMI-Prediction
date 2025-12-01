@@ -9,8 +9,8 @@ import numpy as np
 # Step 1: Load trained models (stored locally)
 # -----------------------------------------------------------
 try:
-    clf_model = joblib.load("models/EMI_LogisticRegression_Model.pkl")
-    reg_model = joblib.load("models/EMI_XGBoostRegressor_Model.pkl")
+    clf_model = joblib.load("EMI_LogisticRegression_Model.pkl")
+    reg_model = joblib.load("EMI_XGBoostRegressor_Model.pkl")
     scaler = joblib.load("models/scaler.pkl")
     st.success("Models loaded successfully 🎉")
 except Exception as e:
