@@ -1,140 +1,247 @@
-# -----------------------------------------------------------
-# app.py — IntelliGiant EMI Prediction (FINAL FIXED VERSION)
-# -----------------------------------------------------------
-
+# app.py — IntelliGiant EMI Prediction (UI like screenshots, exact feature order)
 import streamlit as st
 import pandas as pd
 import joblib
 import numpy as np
 
-# -----------------------------------------------------------
+# ---------------------------------------------------------------------
 # MUST be the FIRST Streamlit command
-# -----------------------------------------------------------
+# ---------------------------------------------------------------------
 st.set_page_config(
-    page_title="IntelliGiant EMI Prediction",
-    page_icon="💰",
-    layout="centered"
+    page_title="IntelliGiant EMI Eligibility Prediction System",
+    page_icon="🏦",
+    layout="wide"
 )
 
-# -----------------------------------------------------------
-# Load Models
-# -----------------------------------------------------------
-st.title("💸 IntelliGiant: EMI Eligibility & EMI Amount Prediction")
-st.write("Analyze your financial profile to check EMI eligibility and estimate EMI amount.")
+# ---------------------------------------------------------------------
+# Minimal CSS to mimic the screenshot look (wide, subtle cards)
+# ---------------------------------------------------------------------
+st.markdown(
+    """
+    <style>
+    /* page background */
+    .reportview-container .main {
+        background-color: #ffffff;
+    }
+    /* header fonts */
+    .big-title { font-size: 34px; font-weight: 800; color: #1f2937; }
+    .subtitle { font-size: 16px; color: #4b5563; margin-bottom: 12px; }
+    /* card-like inputs (give padding so inputs look spaced) */
+    .stTextInput, .stNumberInput, .stSelectbox {
+        padding: 6px 0;
+    }
+    /* tabs styling (small tweak) */
+    .css-1avcm0n e1fqkh3o0 { padding: 0; }
+    /* footer */
+    .ig-footer { color: #6b7280; font-size: 13px; margin-top: 25px; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+# ---------------------------------------------------------------------
+# Load models (cached resource) — adjust paths if your models are in a subfolder
+# ---------------------------------------------------------------------
+@st.cache_resource
+def load_models():
+    clf = joblib.load("EMI_LogisticRegression_Model.pkl")
+    reg = joblib.load("EMI_XGBoostRegressor_Model.pkl")
+    return clf, reg
 
 try:
-    clf_model = joblib.load("EMI_LogisticRegression_Model.pkl")
-    reg_model = joblib.load("EMI_XGBoostRegressor_Model.pkl")
-    st.success("✅ Models loaded successfully!")
+    clf_model, reg_model = load_models()
+    models_loaded = True
 except Exception as e:
-    st.error(f"❌ Error loading models: {e}")
+    models_loaded = False
+    load_error = e
 
-# -----------------------------------------------------------
-# User Inputs
-# -----------------------------------------------------------
-st.header("📋 Enter Applicant Details")
+# ---------------------------------------------------------------------
+# Header (left aligned like screenshot)
+# ---------------------------------------------------------------------
+st.markdown("<div class='big-title'>🏦 IntelliGiant EMI Eligibility Prediction System</div>", unsafe_allow_html=True)
+st.markdown("<div class='subtitle'>Predict your EMI Eligibility and EMI Amount using Machine Learning</div>", unsafe_allow_html=True)
 
-col1, col2 = st.columns(2)
+# show small tabs
+tab1, tab2 = st.tabs(["📋 EMI Eligibility (Classification)", "💰 EMI Amount Prediction (Regression)"])
 
-with col1:
-    age = st.number_input("Age", 18, 70, 30)
-    gender = st.selectbox("Gender", ["Male", "Female"])
-    marital_status = st.selectbox("Marital Status", ["Married", "Single"])
-    education = st.selectbox("Education", ["Graduate", "High School", "Post Graduate", "Professional"])
-    employment_type = st.selectbox("Employment Type", ["Private", "Self-employed"])
-    company_type = st.selectbox("Company Type", ["MNC", "Mid-size", "Small", "Startup"])
+# ---------------------------------------------------------------------
+# Helper: build ordered DataFrame using model.feature_names_in_
+# ---------------------------------------------------------------------
+def build_ordered_input_df(values_dict, feature_names):
+    """Return a DataFrame with columns ordered exactly as feature_names.
+       Missing keys in values_dict will be filled with 0."""
+    ordered = []
+    for f in feature_names:
+        ordered.append(values_dict.get(f, 0))
+    df = pd.DataFrame([ordered], columns=list(feature_names))
+    return df
 
-with col2:
-    monthly_salary = st.number_input("Monthly Salary (₹)", 10000, 2000000, 50000)
-    years_of_employment = st.number_input("Years of Employment", 0, 40, 3)
-    house_type = st.selectbox("House Type", ["Owned", "Rented"])
-    monthly_rent = st.number_input("Monthly Rent (₹)", 0, 100000, 10000)
-    family_size = st.number_input("Family Size", 1, 10, 4)
-    dependents = st.number_input("Dependents", 0, 5, 1)
+# ---------------------------------------------------------------------
+# TAB 1: Classification (EMI Eligibility)
+# ---------------------------------------------------------------------
+with tab1:
+    st.markdown("#### 📝 Input Details for EMI Eligibility Check")
+    # three columns layout similar to screenshot
+    c1, c2, c3 = st.columns([1.4, 1.4, 1.4])
 
-# Financial Information
-st.header("💰 Financial Information")
+    with c1:
+        age = st.number_input("Age", min_value=18, max_value=70, value=30, step=1, key="cls_age")
+        gender = st.selectbox("Gender", ["Male", "Female"], key="cls_gender")
+        family_size = st.number_input("Family Size", min_value=1, max_value=10, value=3, step=1, key="cls_family")
+        dependents = st.number_input("Dependents", min_value=0, max_value=10, value=1, step=1, key="cls_dependents")
 
-school_fees = st.number_input("School Fees (₹)", 0, 100000, 5000)
-college_fees = st.number_input("College Fees (₹)", 0, 200000, 0)
-travel_expenses = st.number_input("Travel Expenses (₹)", 0, 50000, 2000)
-groceries_utilities = st.number_input("Groceries & Utilities (₹)", 0, 100000, 8000)
-other_expenses = st.number_input("Other Monthly Expenses (₹)", 0, 50000, 3000)
-existing_loans = st.selectbox("Any Existing Loans?", ["No", "Yes"])
-current_emi = st.number_input("Current EMI (₹)", 0, 100000, 0)
-credit_score = st.number_input("Credit Score", 300, 900, 650)
-bank_balance = st.number_input("Bank Balance (₹)", 0, 10000000, 20000)
-emergency_fund = st.number_input("Emergency Fund (₹)", 0, 1000000, 10000)
+    with c2:
+        monthly_salary = st.number_input("Monthly Salary", min_value=0, max_value=2000000, value=50000, step=1000, key="cls_salary")
+        years_of_employment = st.number_input("Years of Employment", min_value=0, max_value=40, value=5, step=1, key="cls_years")
+        credit_score = st.number_input("Credit Score", min_value=300, max_value=900, value=650, step=1, key="cls_credit")
+        bank_balance = st.number_input("Bank Balance", min_value=0, max_value=10000000, value=50000, step=1000, key="cls_bank")
 
-emi_scenario = st.selectbox(
-    "EMI Scenario",
-    ["Home Appliances EMI", "Vehicle EMI", "Education EMI", "Personal Loan EMI"]
-)
+    with c3:
+        requested_amount = st.number_input("Requested Loan Amount", min_value=0, max_value=5000000, value=200000, step=1000, key="cls_req_amt")
+        requested_tenure = st.number_input("Requested Tenure (months)", min_value=1, max_value=360, value=24, step=1, key="cls_req_ten")
+        existing_loans = st.number_input("Existing Loans", min_value=0, max_value=10, value=1, step=1, key="cls_exist")
+        house_type = st.selectbox("House Type", ["Owned", "Rented"], key="cls_house")
 
-requested_amount = st.number_input("Requested Loan Amount (₹)", 10000, 5000000, 200000)
-requested_tenure = st.number_input("Requested Tenure (months)", 6, 120, 24)
+    st.markdown("")  # spacing
 
-# -----------------------------------------------------------
-# Build Input Data (EXACT feature names + EXACT order)
-# -----------------------------------------------------------
-input_data = pd.DataFrame([{
-    'age': age,
-    'gender': 1 if gender == "Male" else 0,
-    'monthly_salary': monthly_salary,
-    'years_of_employment': years_of_employment,
-    'house_type': 1 if house_type == "Owned" else 0,
-    'monthly_rent': monthly_rent,
-    'family_size': family_size,
-    'dependents': dependents,
-    'school_fees': school_fees,
-    'college_fees': college_fees,
-    'travel_expenses': travel_expenses,
-    'groceries_utilities': groceries_utilities,
-    'other_monthly_expenses': other_expenses,
-    'existing_loans': 1 if existing_loans == "Yes" else 0,
-    'current_emi_amount': current_emi,
-    'credit_score': credit_score,
-    'bank_balance': bank_balance,
-    'emergency_fund': emergency_fund,
-    'requested_amount': requested_amount,
-    'requested_tenure': requested_tenure,
+    # Build dictionary of inputs using the exact feature names used during training
+    # (these are the names you printed with feature_names_in_)
+    # We'll map them to values; any missing features will be set to 0 later.
+    cls_values = {
+        "age": age,
+        "gender": 1 if gender == "Male" else 0,                 # original used 1/0
+        "monthly_salary": monthly_salary,
+        "years_of_employment": years_of_employment,
+        "house_type": 1 if house_type == "Owned" else 0,
+        "monthly_rent": 0,             # not provided in UI here; keep default 0 to match training
+        "family_size": family_size,
+        "dependents": dependents,
+        "school_fees": 0,
+        "college_fees": 0,
+        "travel_expenses": 0,
+        "groceries_utilities": 0,
+        "other_monthly_expenses": 0,
+        "existing_loans": 1 if existing_loans > 0 else 0,
+        "current_emi_amount": 0,
+        "credit_score": credit_score,
+        "bank_balance": bank_balance,
+        "emergency_fund": 0,
+        "requested_amount": requested_amount,
+        "requested_tenure": requested_tenure,
+        # dummy columns encoded as in your training
+        "marital_status_Single": 1 if st.session_state.get("cls_marital", "Married") == "Single" else 0,
+        "education_High School": 0,
+        "education_Post Graduate": 0,
+        "education_Professional": 0,
+        "employment_type_Private": 0,
+        "employment_type_Self-employed": 0,
+        "company_type_MNC": 0,
+        "company_type_Mid-size": 0,
+        "company_type_Small": 0,
+        "company_type_Startup": 0,
+        "emi_scenario_Education EMI": 0,
+        "emi_scenario_Home Appliances EMI": 0,
+        "emi_scenario_Personal Loan EMI": 0,
+        "emi_scenario_Vehicle EMI": 0
+    }
 
-    # Dummies (MUST MATCH EXACT FEATURE NAMES)
-    'marital_status_Single': 1 if marital_status == "Single" else 0,
-    'education_High School': 1 if education == "High School" else 0,
-    'education_Post Graduate': 1 if education == "Post Graduate" else 0,
-    'education_Professional': 1 if education == "Professional" else 0,
-    'employment_type_Private': 1 if employment_type == "Private" else 0,
-    'employment_type_Self-employed': 1 if employment_type == "Self-employed" else 0,
-    'company_type_MNC': 1 if company_type == "MNC" else 0,
-    'company_type_Mid-size': 1 if company_type == "Mid-size" else 0,
-    'company_type_Small': 1 if company_type == "Small" else 0,
-    'company_type_Startup': 1 if company_type == "Startup" else 0,
-    'emi_scenario_Education EMI': 1 if emi_scenario == "Education EMI" else 0,
-    'emi_scenario_Home Appliances EMI': 1 if emi_scenario == "Home Appliances EMI" else 0,
-    'emi_scenario_Personal Loan EMI': 1 if emi_scenario == "Personal Loan EMI" else 0,
-    'emi_scenario_Vehicle EMI': 1 if emi_scenario == "Vehicle EMI" else 0
-}])
+    # If models failed to load show message
+    if not models_loaded:
+        st.error(f"Model load error: {load_error}")
+    else:
+        # Ensure DataFrame columns are ordered exactly as model expects
+        feature_names_clf = clf_model.feature_names_in_
+        X_cls = build_ordered_input_df(cls_values, feature_names_clf)
 
-# -----------------------------------------------------------
-# Prediction
-# -----------------------------------------------------------
-if st.button("🔍 Predict EMI Eligibility and Amount"):
-    try:
-        eligibility_pred = clf_model.predict(input_data)[0]
-        eligibility_label = "Eligible" if eligibility_pred == 1 else "Not Eligible"
+        # Button and prediction
+        if st.button("🔎 Check EMI Eligibility", key="btn_check_elig"):
+            try:
+                pred = clf_model.predict(X_cls)[0]
+                if pred == 1:
+                    st.success("✅ EMI Eligibility: Eligible")
+                else:
+                    st.error("❌ EMI Eligibility: Not Eligible")
+            except Exception as e:
+                st.error(f"Prediction error: {e}")
 
-        emi_pred = reg_model.predict(input_data)[0]
+# ---------------------------------------------------------------------
+# TAB 2: Regression (EMI Amount Prediction)
+# ---------------------------------------------------------------------
+with tab2:
+    st.markdown("#### 🧾 Input Details for EMI Amount Prediction")
+    r1, r2, r3 = st.columns([1.4, 1.4, 1.4])
 
-        st.subheader("📊 Prediction Results")
-        st.write(f"### ✅ EMI Eligibility: **{eligibility_label}**")
-        st.write(f"### 💵 Predicted EMI Amount: **₹{emi_pred:,.2f}**")
+    with r1:
+        age_r = st.number_input("Age", min_value=18, max_value=70, value=30, step=1, key="reg_age")
+        monthly_salary_r = st.number_input("Monthly Salary", min_value=0, max_value=2000000, value=50000, step=1000, key="reg_salary")
+        years_of_employment_r = st.number_input("Years of Employment", min_value=0, max_value=40, value=5, step=1, key="reg_years")
 
-    except Exception as e:
-        st.error(f"⚠️ Error during prediction: {e}")
+    with r2:
+        requested_amount_r = st.number_input("Requested Amount", min_value=0, max_value=5000000, value=200000, step=1000, key="reg_req_amt")
+        requested_tenure_r = st.number_input("Requested Tenure (months)", min_value=1, max_value=360, value=24, step=1, key="reg_req_ten")
+        credit_score_r = st.number_input("Credit Score", min_value=300, max_value=900, value=650, step=1, key="reg_credit")
 
-# -----------------------------------------------------------
-# Footer
-# -----------------------------------------------------------
+    with r3:
+        existing_loans_r = st.number_input("Existing Loans", min_value=0, max_value=10, value=1, step=1, key="reg_exist")
+        bank_balance_r = st.number_input("Bank Balance", min_value=0, max_value=10000000, value=50000, step=1000, key="reg_bank")
+        family_size_r = st.number_input("Family Size", min_value=1, max_value=10, value=3, step=1, key="reg_family")
+
+    st.markdown("")  # spacing
+
+    # Build regression dictionary (keys matching training)
+    reg_values = {
+        "age": age_r,
+        "gender": 0,   # keep 0/1; UI didn't include gender here in screenshot, default 0
+        "monthly_salary": monthly_salary_r,
+        "years_of_employment": years_of_employment_r,
+        "house_type": 0,
+        "monthly_rent": 0,
+        "family_size": family_size_r,
+        "dependents": 0,
+        "school_fees": 0,
+        "college_fees": 0,
+        "travel_expenses": 0,
+        "groceries_utilities": 0,
+        "other_monthly_expenses": 0,
+        "existing_loans": 1 if existing_loans_r > 0 else 0,
+        "current_emi_amount": 0,
+        "credit_score": credit_score_r,
+        "bank_balance": bank_balance_r,
+        "emergency_fund": 0,
+        "requested_amount": requested_amount_r,
+        "requested_tenure": requested_tenure_r,
+        # dummies (set to 0 by default)
+        "marital_status_Single": 0,
+        "education_High School": 0,
+        "education_Post Graduate": 0,
+        "education_Professional": 0,
+        "employment_type_Private": 0,
+        "employment_type_Self-employed": 0,
+        "company_type_MNC": 0,
+        "company_type_Mid-size": 0,
+        "company_type_Small": 0,
+        "company_type_Startup": 0,
+        "emi_scenario_Education EMI": 0,
+        "emi_scenario_Home Appliances EMI": 0,
+        "emi_scenario_Personal Loan EMI": 0,
+        "emi_scenario_Vehicle EMI": 0
+    }
+
+    if not models_loaded:
+        st.error(f"Model load error: {load_error}")
+    else:
+        feature_names_reg = reg_model.feature_names_in_
+        X_reg = build_ordered_input_df(reg_values, feature_names_reg)
+
+        if st.button("💡 Predict EMI Amount", key="btn_predict_emi"):
+            try:
+                emi_val = reg_model.predict(X_reg)[0]
+                st.info(f"📌 Predicted EMI Amount: ₹{emi_val:,.2f}")
+            except Exception as e:
+                st.error(f"Prediction error: {e}")
+
+# ---------------------------------------------------------------------
+# Footer (small)
+# ---------------------------------------------------------------------
 st.markdown("---")
-st.caption("🚀 Developed by Gayatri Khairnar | IntelliGiant EMI Prediction Platform")
+st.markdown("<div class='ig-footer'>🚀 Powered by MLflow, Streamlit, and Scikit-learn | Developed by Gayatri Khairnar 💙</div>", unsafe_allow_html=True)
