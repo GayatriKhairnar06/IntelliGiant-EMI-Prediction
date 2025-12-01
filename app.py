@@ -1,49 +1,96 @@
-# app.py — IntelliGiant EMI Prediction
-# Deployment-ready version (no MLflow dependency)
+# app.py — IntelliGiant EMI Prediction (feature-safe, order-matching)
+# Save/replace your existing app.py with this file.
 
-# -----------------------------------------------------------
-# Step 0: MUST BE FIRST — Import streamlit & set page config
-# -----------------------------------------------------------
 import streamlit as st
 
-st.set_page_config(
-    page_title="IntelliGiant EMI Prediction",
-    page_icon="💰",
-    layout="centered"
-)
+# ------------------ MUST BE FIRST STREAMLIT COMMAND ------------------
+st.set_page_config(page_title="IntelliGiant EMI Prediction", page_icon="💰", layout="centered")
 
-# -----------------------------------------------------------
-# Step 1: Now import remaining libraries
-# -----------------------------------------------------------
-import pandas as pd
+# ------------------ imports (after page config) ------------------
 import joblib
+import pandas as pd
 import numpy as np
+import traceback
 
-# -----------------------------------------------------------
-# Step 2: Load trained models (stored locally)
-# -----------------------------------------------------------
+# ------------------ Helpers ------------------
+def get_feature_names(model):
+    """
+    Try to extract feature names expected by a model.
+    Tries sklearn attribute `feature_names_in_`, then XGBoost's booster feature names.
+    Returns list or None.
+    """
+    try:
+        if hasattr(model, "feature_names_in_"):
+            return list(model.feature_names_in_)
+        # XGBoost sklearn wrapper may store _feature_names or underlying booster
+        if hasattr(model, "get_booster"):
+            booster = model.get_booster()
+            fn = booster.feature_names
+            if fn:
+                return list(fn)
+        # fallback
+        return None
+    except Exception:
+        return None
+
+def one_hot_match(feature_name, user_values):
+    """
+    Given a feature_name like 'education_Post Graduate' or 'emi_scenario_Vehicle EMI',
+    check user_values (dict) to decide if it should be 1 or 0.
+    """
+    # split on first underscore
+    if "_" not in feature_name:
+        return None
+    base, cat = feature_name.split("_", 1)
+    base = base.strip().lower()
+    cat = cat.strip().lower()
+
+    # common mapping keys in user inputs (lowercase)
+    if base in user_values:
+        val = user_values[base]
+        # if user val is categorical string
+        if isinstance(val, str):
+            return 1 if val.strip().lower() == cat else 0
+        # if user val is boolean/int
+        if isinstance(val, (int, float, np.integer, np.floating)):
+            # probably not one-hot; return None to let caller handle numeric
+            return None
+    # Also handle patterns where feature_name uses spaces or hyphens vs user value
+    # e.g., 'house_type_Owned' vs user_values['house_type']='Owned'
+    for k, v in user_values.items():
+        if isinstance(v, str) and base == k:
+            return 1 if v.strip().lower() == cat else 0
+    return None
+
+def safe_float(x):
+    try:
+        return float(x)
+    except Exception:
+        return 0.0
+
+# ------------------ Load models ------------------
+model_load_error = None
+clf_model = None
+reg_model = None
 try:
     clf_model = joblib.load("EMI_LogisticRegression_Model.pkl")
     reg_model = joblib.load("EMI_XGBoostRegressor_Model.pkl")
-    model_status = "success"
+    model_status = "loaded"
 except Exception as e:
-    model_status = str(e)
+    model_load_error = traceback.format_exc()
+    model_status = f"error: {e}"
 
-# -----------------------------------------------------------
-# Step 3: Page Header
-# -----------------------------------------------------------
+# ------------------ Page header ------------------
 st.title("💸 IntelliGiant: EMI Eligibility & Prediction Platform")
-
-# Show model status AFTER set_page_config
-if model_status == "success":
+if model_status == "loaded":
     st.success("✅ Models loaded successfully!")
 else:
-    st.error(f"❌ Error loading models: {model_status}")
+    st.error("❌ Error loading models. See details below.")
+    st.code(model_load_error)
 
 st.write("Analyze your financial profile to check EMI eligibility and estimate EMI amount.")
 
-# ---------------------------- Your full UI continues unchanged ----------------------------
-
+# ------------------ User Input UI ------------------
 st.header("📋 Enter Applicant Details")
 
 col1, col2 = st.columns(2)
@@ -55,12 +102,12 @@ with col1:
     employment_type = st.selectbox("Employment Type", ["Private", "Self-employed"])
     company_type = st.selectbox("Company Type", ["MNC", "Mid-size", "Small", "Startup"])
 with col2:
-    monthly_salary = st.number_input("Monthly Salary (₹)", 10000, 2000000, 50000)
+    monthly_salary = st.number_input("Monthly Salary (₹)", 10000, 2000000, 50000, step=1000)
     years_of_employment = st.number_input("Years of Employment", 0, 40, 3)
     house_type = st.selectbox("House Type", ["Owned", "Rented"])
     monthly_rent = st.number_input("Monthly Rent (₹)", 0, 100000, 10000)
     family_size = st.number_input("Family Size", 1, 10, 4)
-    dependents = st.number_input("Dependents", 0, 5, 1)
+    dependents = st.number_input("Dependents", 0, 10, 1)
 
 st.header("💰 Financial Information")
 school_fees = st.number_input("School Fees (₹)", 0, 100000, 5000)
@@ -77,68 +124,190 @@ emi_scenario = st.selectbox(
     "EMI Scenario",
     ["Home Appliances EMI", "Vehicle EMI", "Education EMI", "Personal Loan EMI"]
 )
-requested_amount = st.number_input("Requested Loan Amount (₹)", 10000, 5000000, 200000)
+requested_amount = st.number_input("Requested Loan Amount (₹)", 10000, 5000000, 200000, step=1000)
 requested_tenure = st.number_input("Requested Tenure (months)", 6, 120, 24)
 
-# -----------------------------------------------------------
-# Step 4: Preprocess Input Data
-# -----------------------------------------------------------
-input_data = pd.DataFrame({
-    "age": [age],
-    "gender": [1 if gender == "Male" else 0],
-    "marital_status_Single": [1 if marital_status == "Single" else 0],
-    "education_High School": [1 if education == "High School" else 0],
-    "education_Post Graduate": [1 if education == "Post Graduate" else 0],
-    "education_Professional": [1 if education == "Professional" else 0],
-    "monthly_salary": [monthly_salary],
-    "employment_type_Private": [1 if employment_type == "Private" else 0],
-    "employment_type_Self-employed": [1 if employment_type == "Self-employed" else 0],
-    "years_of_employment": [years_of_employment],
-    "company_type_MNC": [1 if company_type == "MNC" else 0],
-    "company_type_Mid-size": [1 if company_type == "Mid-size" else 0],
-    "company_type_Small": [1 if company_type == "Small" else 0],
-    "company_type_Startup": [1 if company_type == "Startup" else 0],
-    "house_type": [1 if house_type == "Owned" else 0],
-    "monthly_rent": [monthly_rent],
-    "family_size": [family_size],
-    "dependents": [dependents],
-    "school_fees": [school_fees],
-    "college_fees": [college_fees],
-    "travel_expenses": [travel_expenses],
-    "groceries_utilities": [groceries_utilities],
-    "other_monthly_expenses": [other_expenses],
-    "existing_loans": [1 if existing_loans == "Yes" else 0],
-    "current_emi_amount": [current_emi],
-    "credit_score": [credit_score],
-    "bank_balance": [bank_balance],
-    "emergency_fund": [emergency_fund],
-    "emi_scenario_Education EMI": [1 if emi_scenario == "Education EMI" else 0],
-    "emi_scenario_Home Appliances EMI": [1 if emi_scenario == "Home Appliances EMI" else 0],
-    "emi_scenario_Personal Loan EMI": [1 if emi_scenario == "Personal Loan EMI" else 0],
-    "emi_scenario_Vehicle EMI": [1 if emi_scenario == "Vehicle EMI" else 0],
-    "requested_amount": [requested_amount],
-    "requested_tenure": [requested_tenure],
-})
+# ------------------ Build a user_values dict for easy matching ------------------
+user_values = {
+    "age": age,
+    "gender": gender,
+    "marital_status": marital_status,
+    "education": education,
+    "employment_type": employment_type,
+    "company_type": company_type,
+    "monthly_salary": monthly_salary,
+    "years_of_employment": years_of_employment,
+    "house_type": house_type,
+    "monthly_rent": monthly_rent,
+    "family_size": family_size,
+    "dependents": dependents,
+    "school_fees": school_fees,
+    "college_fees": college_fees,
+    "travel_expenses": travel_expenses,
+    "groceries_utilities": groceries_utilities,
+    "other_monthly_expenses": other_expenses,
+    "existing_loans": 1 if existing_loans == "Yes" else 0,
+    "current_emi_amount": current_emi,
+    "credit_score": credit_score,
+    "bank_balance": bank_balance,
+    "emergency_fund": emergency_fund,
+    "emi_scenario": emi_scenario,
+    "requested_amount": requested_amount,
+    "requested_tenure": requested_tenure,
+}
 
-# -----------------------------------------------------------
-# Step 5: Prediction
-# -----------------------------------------------------------
+# ------------------ Determine required features (from models) ------------------
+required_features_clf = get_feature_names(clf_model) if clf_model is not None else None
+required_features_reg = get_feature_names(reg_model) if reg_model is not None else None
+
+# Prefer classifier feature list for matching if present, else reg, else union
+if required_features_clf:
+    required_features = required_features_clf
+elif required_features_reg:
+    required_features = required_features_reg
+else:
+    required_features = None
+
+if required_features is None:
+    st.warning("Could not detect feature names from models. The app will attempt a best-effort mapping.")
+    # fallback to the columns you previously used in the app (best-effort)
+    required_features = [
+        "age", "gender", "marital_status_Single", "education_High School",
+        "education_Post Graduate", "education_Professional", "monthly_salary",
+        "employment_type_Private", "employment_type_Self-employed", "years_of_employment",
+        "company_type_MNC", "company_type_Mid-size", "company_type_Small", "company_type_Startup",
+        "house_type", "monthly_rent", "family_size", "dependents", "school_fees",
+        "college_fees", "travel_expenses", "groceries_utilities", "other_monthly_expenses",
+        "existing_loans", "current_emi_amount", "credit_score", "bank_balance",
+        "emergency_fund", "emi_scenario_Education EMI", "emi_scenario_Home Appliances EMI",
+        "emi_scenario_Personal Loan EMI", "emi_scenario_Vehicle EMI",
+        "requested_amount", "requested_tenure"
+    ]
+
+# ------------------ Construct input row matching required_features in order ------------------
+input_row = {}
+missing_filled = []
+unmapped = []
+
+for feat in required_features:
+    # exact direct numeric match?
+    key_lower = feat.strip().lower()
+    if key_lower in user_values:
+        # direct value present (careful with categorical strings vs numeric)
+        input_row[feat] = user_values[key_lower]
+        continue
+
+    # common straightforward keys mapping (e.g. 'gender' might be stored as 'gender' numeric)
+    if feat.strip().lower() == "gender":
+        input_row[feat] = 1 if gender == "Male" else 0
+        continue
+
+    # try numeric-suffixed names like 'monthly_salary' etc.
+    if feat in user_values:
+        input_row[feat] = user_values[feat]
+        continue
+
+    # try one-hot style matching like 'education_Post Graduate'
+    oh = one_hot_match(feat, user_values)
+    if oh is not None:
+        input_row[feat] = oh
+        continue
+
+    # Some training pipelines use prefixes or different separators like '-'
+    # Try replacing '-' with '_' and retry
+    alt = feat.replace("-", "_")
+    if alt.lower() in user_values:
+        input_row[feat] = user_values[alt.lower()]
+        continue
+
+    # handle cases like 'marital_status_Married' or 'marital_status_Single'
+    if "_" in feat:
+        base = feat.split("_", 1)[0].strip().lower()
+        if base in user_values and isinstance(user_values[base], str):
+            # set 1 if category matches
+            input_row[feat] = 1 if user_values[base].strip().lower() == feat.split("_", 1)[1].strip().lower() else 0
+            continue
+
+    # handle boolean-like names stored as 0/1 e.g., 'existing_loans'
+    if feat.lower() in ["existing_loans", "existingloan", "has_existing_loans"]:
+        input_row[feat] = 1 if existing_loans == "Yes" else 0
+        continue
+
+    # if none matched, set default 0 (safe) and note it
+    input_row[feat] = 0
+    missing_filled.append(feat)
+
+# Convert any numpy types and ensure numeric where possible
+for k, v in input_row.items():
+    # if v is a string that should be numeric, try to convert where reasonable
+    if isinstance(v, str):
+        # leave strings for models expecting string (rare) else attempt to convert
+        try:
+            nv = float(v)
+            input_row[k] = nv
+        except Exception:
+            # keep as-is (some models accept categorical strings if pipeline exists)
+            input_row[k] = v
+    else:
+        input_row[k] = v
+
+# Build DataFrame with columns in required order
+input_df = pd.DataFrame([input_row], columns=required_features)
+
+# Show a compact preview and warning if many features had to be filled
+with st.expander("Input features preview (matched to model)"):
+    st.dataframe(input_df.T.rename(columns={0: "value"}))
+
+if missing_filled:
+    st.warning(f"{len(missing_filled)} feature(s) were not directly mappable from UI and were set to 0. Example: {missing_filled[:5]}")
+    if st.checkbox("Show which features were auto-filled with 0"):
+        st.write(missing_filled)
+
+# ------------------ Prediction ------------------
 if st.button("🔍 Predict EMI Eligibility and Amount"):
-    try:
-        eligibility_pred = clf_model.predict(input_data)[0]
-        eligibility_label = "Eligible" if eligibility_pred == 1 else "Not Eligible"
+    if model_status != "loaded":
+        st.error("Models not loaded. Cannot predict.")
+    else:
+        try:
+            # Ensure both models accept the same feature order. If not, reorder accordingly
+            # For classifier:
+            clf_features = get_feature_names(clf_model) or required_features
+            reg_features = get_feature_names(reg_model) or required_features
 
-        emi_pred = reg_model.predict(input_data)[0]
+            X_clf = input_df.copy()
+            X_reg = input_df.copy()
 
-        st.subheader("📊 Prediction Results")
-        st.write(f"### ✅ EMI Eligibility: {eligibility_label}")
-        st.write(f"### 💵 Predicted EMI Amount: ₹{emi_pred:,.2f}")
+            # Reorder/clamp columns for each model if needed
+            if clf_features:
+                # keep only required columns for clf in same order
+                clf_cols = [c for c in clf_features if c in X_clf.columns]
+                missing = [c for c in clf_features if c not in X_clf.columns]
+                if missing:
+                    st.warning(f"Classifier expects {len(missing)} columns missing from input — they'll be treated as 0: {missing[:5]}")
+                # add missing columns as zeros
+                for c in missing:
+                    X_clf[c] = 0
+                X_clf = X_clf[clf_features]
 
-    except Exception as e:
-        st.error(f"⚠️ Error during prediction: {e}")
+            if reg_features:
+                reg_cols = [c for c in reg_features if c in X_reg.columns]
+                missing_r = [c for c in reg_features if c not in X_reg.columns]
+                if missing_r:
+                    st.warning(f"Regressor expects {len(missing_r)} columns missing from input — they'll be treated as 0: {missing_r[:5]}")
+                for c in missing_r:
+                    X_reg[c] = 0
+                X_reg = X_reg[reg_features]
 
-# -----------------------------------------------------------
-# Step 6: Footer
-# -----------------------------------------------------------
-st.markdown("---")
-st.caption("🚀 Developed by Gayatri Khairnar | IntelliGiant EMI Prediction Platform")
+            # predict
+            eligibility_pred = clf_model.predict(X_clf)[0]
+            eligibility_label = "Eligible" if int(eligibility_pred) == 1 else "Not Eligible"
+
+            emi_pred = reg_model.predict(X_reg)[0]
+
+            st.subheader("📊 Prediction Results")
+            st.write(f"### ✅ EMI Eligibility: **{eligibility_label}**")
+            st.write(f"### 💵 Predicted EMI Amount: **₹{emi_pred:,.2f}**")
+
+        except Exception as e:
+            st.error("⚠️ Error during prediction. See details below.")
+            st.exception(e)
