@@ -1,32 +1,49 @@
 # app.py — IntelliGiant EMI Prediction
 # Deployment-ready version (no MLflow dependency)
 
+# -----------------------------------------------------------
+# Step 0: MUST BE FIRST — Import streamlit & set page config
+# -----------------------------------------------------------
 import streamlit as st
+
+st.set_page_config(
+    page_title="IntelliGiant EMI Prediction",
+    page_icon="💰",
+    layout="centered"
+)
+
+# -----------------------------------------------------------
+# Step 1: Now import remaining libraries
+# -----------------------------------------------------------
 import pandas as pd
 import joblib
 import numpy as np
 
 # -----------------------------------------------------------
-# Step 1: Load trained models (stored locally)
+# Step 2: Load trained models (stored locally)
 # -----------------------------------------------------------
 try:
     clf_model = joblib.load("EMI_LogisticRegression_Model.pkl")
     reg_model = joblib.load("EMI_XGBoostRegressor_Model.pkl")
-    st.success("✅ Models loaded successfully!")
+    model_status = "success"
 except Exception as e:
-    st.error(f"❌ Error loading models: {e}")
+    model_status = str(e)
 
 # -----------------------------------------------------------
-# Step 2: Streamlit Page Setup
+# Step 3: Page Header
 # -----------------------------------------------------------
-st.set_page_config(page_title="IntelliGiant EMI Prediction", page_icon="💰", layout="centered")
-
 st.title("💸 IntelliGiant: EMI Eligibility & Prediction Platform")
+
+# Show model status AFTER set_page_config
+if model_status == "success":
+    st.success("✅ Models loaded successfully!")
+else:
+    st.error(f"❌ Error loading models: {model_status}")
+
 st.write("Analyze your financial profile to check EMI eligibility and estimate EMI amount.")
 
-# -----------------------------------------------------------
-# Step 3: Collect User Inputs
-# -----------------------------------------------------------
+# ---------------------------- Your full UI continues unchanged ----------------------------
+
 st.header("📋 Enter Applicant Details")
 
 col1, col2 = st.columns(2)
@@ -108,11 +125,9 @@ input_data = pd.DataFrame({
 # -----------------------------------------------------------
 if st.button("🔍 Predict EMI Eligibility and Amount"):
     try:
-        # Classification prediction
         eligibility_pred = clf_model.predict(input_data)[0]
         eligibility_label = "Eligible" if eligibility_pred == 1 else "Not Eligible"
 
-        # Regression prediction (EMI amount)
         emi_pred = reg_model.predict(input_data)[0]
 
         st.subheader("📊 Prediction Results")
